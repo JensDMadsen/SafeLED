@@ -1,0 +1,583 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>README.md</title>
+  <link rel="stylesheet" href="https://stackedit.io/style.css" />
+</head>
+
+<body class="stackedit">
+  <div class="stackedit__left">
+    <div class="stackedit__toc">
+      
+<ul>
+<li><a href="#safeled">SafeLED</a>
+<ul>
+<li><a href="#table-of-contents">Table of Contents</a></li>
+</ul>
+</li>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#background-and-motivation">Background and Motivation</a></li>
+<li><a href="#design-goals">Design Goals</a></li>
+<li><a href="#hardware-concept">Hardware Concept</a></li>
+<li><a href="#led-types">LED Types</a></li>
+<li><a href="#api-overview">API Overview</a>
+<ul>
+<li><a href="#initialization">Initialization</a></li>
+<li><a href="#set-led-state">Set LED State</a></li>
+<li><a href="#query-led-type">Query LED Type</a></li>
+</ul>
+</li>
+<li><a href="#runtime-verification">Runtime Verification</a></li>
+<li><a href="#voltage-verification">Voltage Verification</a></li>
+<li><a href="#watchdog-usage">Watchdog Usage</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#arduino-backend-example">Arduino Backend Example</a></li>
+<li><a href="#optional-statistics-layer">Optional Statistics Layer</a></li>
+<li><a href="#embedded-fundamentals">Embedded Fundamentals</a></li>
+<li><a href="#example-usage">Example Usage</a></li>
+<li><a href="#industrial-motivation">Industrial Motivation</a></li>
+<li><a href="#license">License</a>
+<ul>
+<li><a href="#contact">Contact</a></li>
+</ul>
+</li>
+</ul>
+
+    </div>
+  </div>
+  <div class="stackedit__right">
+    <div class="stackedit__html">
+      <h1 id="safeled">SafeLED</h1>
+<p>SafeLED is a library for verified mono and 2-pin bi-color status LEDs.</p>
+<p>It does not just turn an LED on.<br>
+It also verifies that the LED behaves electrically as expected.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#background-and-motivation">Background and Motivation</a></li>
+<li><a href="#design-goals">Design Goals</a></li>
+<li><a href="#hardware-concept">Hardware Concept</a></li>
+<li><a href="#led-types">LED Types</a></li>
+<li><a href="#api-overview">API Overview</a></li>
+<li><a href="#runtime-verification">Runtime Verification</a></li>
+<li><a href="#voltage-verification">Voltage Verification</a></li>
+<li><a href="#watchdog-usage">Watchdog Usage</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#arduino-backend-example">Arduino Backend Example</a></li>
+<li><a href="#optional-statistics-layer">Optional Statistics Layer</a></li>
+<li><a href="#embedded-fundamentals">Embedded Fundamentals</a></li>
+<li><a href="#example-usage">Example Usage</a></li>
+<li><a href="#industrial-motivation">Industrial Motivation</a></li>
+<li><a href="#license">License</a></li>
+<li><a href="#contact">Contact</a></li>
+</ul>
+<hr>
+<h1 id="introduction">Introduction</h1>
+<p>Most LED examples look like this:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token function">digitalWrite</span><span class="token punctuation">(</span>LED_PIN<span class="token punctuation">,</span> HIGH<span class="token punctuation">)</span><span class="token punctuation">;</span>    <span class="token comment">// Turn LED on.</span>
+</code></pre>
+<p>This assumes that:</p>
+<ul>
+<li>the LED is mounted correctly</li>
+<li>the solder joints are good</li>
+<li>the connector is connected</li>
+<li>the LED is not damaged</li>
+<li>the polarity is correct</li>
+<li>the signal path works</li>
+</ul>
+<p>In real hardware, this is not always true.</p>
+<p>SafeLED adds electrical feedback and runtime verification to simple status LEDs.</p>
+<hr>
+<h1 id="background-and-motivation">Background and Motivation</h1>
+<p>SafeLED was created from the idea that even simple outputs should sometimes be verified.</p>
+<p>An LED may be used as:</p>
+<ul>
+<li>a status indicator</li>
+<li>an alarm indicator</li>
+<li>a warning lamp</li>
+<li>a brake light</li>
+<li>a service indicator</li>
+<li>or another visual signal</li>
+</ul>
+<p>In such cases, it may not be enough for software to simply write to an output pin.</p>
+<p>SafeLED can help detect:</p>
+<ul>
+<li>missing LEDs</li>
+<li>reversed LEDs</li>
+<li>incorrect polarity</li>
+<li>unstable connections</li>
+<li>bad solder joints</li>
+<li>intermittent failures</li>
+<li>connector problems</li>
+<li>unexpected LED voltage</li>
+</ul>
+<p>The goal is not only to control LEDs.</p>
+<p>The goal is to verify that reality matches software assumptions.</p>
+<hr>
+<h1 id="design-goals">Design Goals</h1>
+<p>SafeLED is designed to be:</p>
+<ul>
+<li>simple to use</li>
+<li>suitable for mono LEDs</li>
+<li>suitable for 2-pin bi-color LEDs</li>
+<li>able to detect LED polarity</li>
+<li>able to correct reversed LED mounting in software</li>
+<li>able to verify LED voltage</li>
+<li>usable during runtime</li>
+<li>suitable for embedded diagnostics</li>
+<li>portable to different hardware platforms</li>
+</ul>
+<p>SafeLED is intended for one status LED or one 2-pin bi-color LED, not LED strips, LED matrices, RGB displays, or animation effects.</p>
+<hr>
+<h1 id="hardware-concept">Hardware Concept</h1>
+<p>SafeLED uses two GPIO pins, one current limiting resistor, one LED, and one ADC input.</p>
+<pre class=" language-text"><code class="prism  language-text">LED_R  &gt;──┐
+          │
+         ┌┴┐
+         │R│
+         │ │
+         └┬┘
+          │
+LED_FB &lt;──┤
+          │
+         ─┴─ /
+         \ / - LED
+         ─┬─ \
+          │
+LED_L  &gt;──┘
+</code></pre>
+<p><code>LED_R</code> and <code>LED_L</code> are driven as outputs.</p>
+<p><code>LED_FB</code> is connected to an ADC input and measures the voltage at the junction between the resistor and the LED.</p>
+<p>Current can flow in both directions:</p>
+<pre class=" language-text"><code class="prism  language-text">LED_R → R → LED → LED_L
+LED_L → LED → R → LED_R
+</code></pre>
+<p>This allows the library to detect which direction conducts.</p>
+<p>For a mono LED, only one direction should conduct.</p>
+<p>For a 2-pin bi-color LED, both directions should conduct, normally with different forward voltages.</p>
+<hr>
+<h1 id="led-types">LED Types</h1>
+<p>SafeLED detects the number of available LED channels during initialization.</p>
+
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>No LED detected</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Mono LED detected</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2-pin bi-color LED detected</td>
+</tr>
+</tbody>
+</table><p>Internally this may be represented as:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp">uint8_t _colors<span class="token punctuation">;</span>        <span class="token comment">// detected LED capability, set by init()</span>
+<span class="token keyword">bool</span>    _reversed<span class="token punctuation">;</span>      <span class="token comment">// detected physical polarity correction, set by init()</span>
+uint8_t _state<span class="token punctuation">;</span>         <span class="token comment">// current logical LED state, set by set()</span>
+</code></pre>
+<p>Where:</p>
+<pre class=" language-text"><code class="prism  language-text">_colors:
+  0 = no LED
+  1 = mono LED
+  2 = bi-color LED
+
+_reversed:
+  false = physical LED polarity matches standard direction
+  true  = physical LED polarity is logically reversed
+
+_state:
+  0 = LED turned off
+  1 = Mono LED or low-Vf channel of a bi-color LED turned on
+  2 = High-Vf channel of a bi-color LED turned on
+</code></pre>
+<hr>
+<h1 id="api-overview">API Overview</h1>
+<h2 id="initialization">Initialization</h2>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">bool</span> <span class="token function">init</span><span class="token punctuation">(</span>uint8_t requiredColors <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Initialize and detect LED type.</span>
+</code></pre>
+
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Accept mono or bi-color LED</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Require mono LED</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Require bi-color LED</td>
+</tr>
+</tbody>
+</table><p>Returns:</p>
+<pre class=" language-text"><code class="prism  language-text">true  = required LED type detected and validated
+false = no LED, wrong LED type, or invalid voltage
+</code></pre>
+<p><code>init()</code> detects:</p>
+<ul>
+<li>whether an LED is present</li>
+<li>whether it is mono or bi-color</li>
+<li>which physical direction conducts</li>
+<li>whether polarity must be reversed internally</li>
+</ul>
+<h2 id="set-led-state">Set LED State</h2>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">bool</span> <span class="token function">set</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">)</span><span class="token punctuation">;</span>        <span class="token comment">// Set logical LED state.</span>
+</code></pre>
+
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Off</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Mono LED or low-Vf channel</td>
+</tr>
+<tr>
+<td>2</td>
+<td>High-Vf channel of a bi-color LED</td>
+</tr>
+</tbody>
+</table><p>Example validity check:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token punctuation">(</span>state <span class="token operator">&gt;</span> _colors<span class="token punctuation">)</span><span class="token operator">||</span><span class="token punctuation">(</span>_colors <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>    <span class="token comment">// Check if LED is detected and requested state is supported.</span>
+  <span class="token function">ledError</span><span class="token punctuation">(</span>state<span class="token punctuation">,</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                        <span class="token comment">// Report unsupported LED state.</span>
+  <span class="token keyword">return</span> <span class="token boolean">false</span><span class="token punctuation">;</span>                             <span class="token comment">// Reject unsupported LED state.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>If <code>_colors</code> is <code>0</code>, all attempts to turn on an LED fail.</p>
+<h2 id="query-led-type">Query LED Type</h2>
+<pre class=" language-cpp"><code class="prism  language-cpp">uint8_t <span class="token function">getColors</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span><span class="token punctuation">;</span>      <span class="token comment">// Returns detected LED capability.</span>
+<span class="token keyword">bool</span> <span class="token function">isMono</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span><span class="token punctuation">;</span>            <span class="token comment">// Returns true if a mono LED is detected.</span>
+<span class="token keyword">bool</span> <span class="token function">isBiColor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span><span class="token punctuation">;</span>         <span class="token comment">// Returns true if a bi-color LED is detected.</span>
+</code></pre>
+<p>These helper functions allow the application to query the detected LED capability after <code>init()</code>.</p>
+<p><code>getColors()</code> returns the internally detected LED capability value:</p>
+
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>No LED detected</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Mono LED detected</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2-pin bi-color LED detected</td>
+</tr>
+</tbody>
+</table><p>Typical usage:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">if</span> <span class="token punctuation">(</span>led<span class="token punctuation">.</span><span class="token function">isBiColor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>          <span class="token comment">// Check if LED supports second color.</span>
+    led<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                 <span class="token comment">// Turn on high-Vf LED channel.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Implementations:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp">uint8_t <span class="token function">getColors</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span> <span class="token punctuation">{</span>     <span class="token comment">// Returns detected LED capability.</span>
+    <span class="token keyword">return</span> _colors<span class="token punctuation">;</span>             <span class="token comment">// Return detected LED capability.</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">bool</span> <span class="token function">isMono</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span> <span class="token punctuation">{</span>           <span class="token comment">// Returns true if a mono LED is detected.</span>
+    <span class="token keyword">return</span> _colors <span class="token operator">==</span> <span class="token number">1</span><span class="token punctuation">;</span>        <span class="token comment">// Check if detected LED is mono.</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">bool</span> <span class="token function">isBiColor</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span> <span class="token punctuation">{</span>        <span class="token comment">// Returns true if a bi-color LED is detected.</span>
+    <span class="token keyword">return</span> _colors <span class="token operator">==</span> <span class="token number">2</span><span class="token punctuation">;</span>        <span class="token comment">// Check if detected LED is bi-color.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>These helper functions are optional convenience wrappers around <code>_colors</code>.</p>
+<p>Applications may also use <code>getColors()</code> directly if more compact code is preferred.</p>
+<hr>
+<h1 id="runtime-verification">Runtime Verification</h1>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">bool</span> <span class="token function">check</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>   <span class="token comment">// Verify LED operation during runtime.</span>
+</code></pre>
+<p><code>check()</code> performs a non-intrusive verification:</p>
+<ul>
+<li>if the LED is off, no electrical LED test is performed</li>
+<li>if the LED is on, the LED voltage is measured and validated</li>
+</ul>
+<p>This avoids unwanted visible blinking during runtime diagnostics.</p>
+<hr>
+<h1 id="voltage-verification">Voltage Verification</h1>
+<p>SafeLED works with normalized ADC values, not floating point voltages.</p>
+<p>A typical internal ADC type may be:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">using</span> LedAdc <span class="token operator">=</span> uint16_t<span class="token punctuation">;</span>                <span class="token comment">// Normalized ADC type.</span>
+</code></pre>
+<p>Applications may override:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">bool</span> <span class="token function">voltageOk1</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Validate mono LED or low-Vf channel.</span>
+<span class="token keyword">virtual</span> <span class="token keyword">bool</span> <span class="token function">voltageOk2</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Validate high-Vf bi-color channel.</span>
+</code></pre>
+<p>Default implementation example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">bool</span> <span class="token function">voltageOk1</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// Validate mono LED or low-Vf channel.</span>
+    <span class="token keyword">return</span> adc <span class="token operator">&gt;=</span> minDefault1 <span class="token operator">&amp;&amp;</span>
+           adc <span class="token operator">&lt;=</span> maxDefault1<span class="token punctuation">;</span>          <span class="token comment">// Check upper and lower voltage limits.</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">virtual</span> <span class="token keyword">bool</span> <span class="token function">voltageOk2</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token comment">// Validate high-Vf bi-color channel.</span>
+    <span class="token keyword">return</span> adc <span class="token operator">&gt;=</span> minDefault2 <span class="token operator">&amp;&amp;</span>
+           adc <span class="token operator">&lt;=</span> maxDefault2<span class="token punctuation">;</span>          <span class="token comment">// Check upper and lower voltage limits.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Applications may override these functions to implement application-specific validation.</p>
+<p>Example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">class</span> <span class="token class-name">MySafeLED</span> <span class="token operator">:</span> <span class="token keyword">public</span> ArduinoSafeLED <span class="token punctuation">{</span>
+<span class="token keyword">public</span><span class="token operator">:</span>
+    <span class="token keyword">using</span> ArduinoSafeLED<span class="token operator">::</span>ArduinoSafeLED<span class="token punctuation">;</span>       <span class="token comment">// Inherit constructor(s) from ArduinoSafeLED.</span>
+<span class="token keyword">protected</span><span class="token operator">:</span>
+    <span class="token keyword">bool</span> <span class="token function">voltageOk1</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span> override <span class="token punctuation">{</span>    <span class="token comment">// Validate red LED channel.</span>
+        <span class="token keyword">return</span> adc <span class="token operator">&gt;=</span> <span class="token number">12000</span> <span class="token operator">&amp;&amp;</span>
+               adc <span class="token operator">&lt;=</span> <span class="token number">32000</span><span class="token punctuation">;</span>                    <span class="token comment">// Check upper and lower voltage limits.</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">bool</span> <span class="token function">voltageOk2</span><span class="token punctuation">(</span>uint16_t adc<span class="token punctuation">)</span> override <span class="token punctuation">{</span>    <span class="token comment">// Validate green LED channel.</span>
+        <span class="token keyword">return</span> adc <span class="token operator">&gt;=</span> <span class="token number">22000</span> <span class="token operator">&amp;&amp;</span>
+               adc <span class="token operator">&lt;=</span> <span class="token number">52000</span><span class="token punctuation">;</span>                    <span class="token comment">// Check upper and lower voltage limits.</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+</code></pre>
+<p>This allows the application to:</p>
+<ul>
+<li>validate specific LED types</li>
+<li>validate supply voltage assumptions</li>
+<li>detect unexpected hardware behavior</li>
+<li>tighten diagnostic limits for safety-critical systems</li>
+</ul>
+<hr>
+<h1 id="watchdog-usage">Watchdog Usage</h1>
+<p>A watchdog should only be cleared when the system is known to operate correctly.</p>
+<p>In some systems, LEDs are used as important status indicators. If such an indicator fails, the system may no longer provide valid visual status information.</p>
+<p>SafeLED makes it possible to verify that the LED is electrically plausible before clearing the watchdog.</p>
+<p>Example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">if</span> <span class="token punctuation">(</span>statusLed<span class="token punctuation">.</span><span class="token function">check</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>        <span class="token comment">// Verify LED operation.</span>
+    <span class="token function">wdt_reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                <span class="token comment">// Clear watchdog timer.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>The <code>check()</code> function does not turn the LED on by itself. It only verifies the LED if it is already on.</p>
+<p>If LED verification fails, the application may:</p>
+<ul>
+<li>avoid clearing the watchdog</li>
+<li>enter a safe state</li>
+<li>log the fault</li>
+<li>signal an error through other mechanisms</li>
+</ul>
+<hr>
+<h1 id="architecture">Architecture</h1>
+<p>SafeLED can be implemented as a small hardware-independent core.</p>
+<p>The core state can be as small as:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp">uint8_t _colors<span class="token punctuation">;</span>    <span class="token comment">// detected LED capability, set by init()</span>
+<span class="token keyword">bool</span>    _reversed<span class="token punctuation">;</span>  <span class="token comment">// detected physical polarity correction, set by init()</span>
+uint8_t _state<span class="token punctuation">;</span>     <span class="token comment">// current logical LED state, set by set()</span>
+</code></pre>
+<p>Hardware access can be supplied through virtual functions:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">initHardware</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                    <span class="token comment">// Initialize hardware backend.</span>
+
+<span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">driveOff</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                        <span class="token comment">// Disable LED current.</span>
+<span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">driveRL</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                        <span class="token comment">// Drive current from resistor side to LED side.</span>
+<span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">driveLR</span><span class="token punctuation">(</span><span class="token punctuation">)</span>  <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                        <span class="token comment">// Drive current from LED side to resistor side.</span>
+
+<span class="token keyword">virtual</span> uint16_t <span class="token function">readAdc</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                     <span class="token comment">// Returns normalized voltage between 0-65535.</span>
+
+<span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">,</span> uint16_t adc<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Called when LED verification fails.</span>
+</code></pre>
+<p>The hardware backend only controls the physical direction.</p>
+<p>SafeLED uses normalized 16-bit ADC values.</p>
+<p>Independent of the physical ADC resolution, all ADC measurements are normalized to the range 0-65535.</p>
+<p>Examples:</p>
+<p>10-bit ADC:<br>
+adc16 = adc10 &lt;&lt; 6</p>
+<p>12-bit ADC:<br>
+adc16 = adc12 &lt;&lt; 4</p>
+<p>16-bit ADC:<br>
+adc16 = adc16</p>
+<p>The SafeLED core maps logical states such as low-Vf and high-Vf to the physical RL/LR directions after <code>init()</code> has detected the LED.</p>
+<p>This allows the same core logic to be used with:</p>
+<ul>
+<li>Arduino GPIO</li>
+<li>direct port access</li>
+<li>template-based pin backends</li>
+<li>other microcontrollers</li>
+<li>unit test backends</li>
+</ul>
+<hr>
+<h1 id="arduino-backend-example">Arduino Backend Example</h1>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">class</span> <span class="token class-name">ArduinoSafeLED</span> <span class="token operator">:</span> <span class="token keyword">public</span> SafeLED <span class="token punctuation">{</span>
+<span class="token keyword">protected</span><span class="token operator">:</span>
+    uint8_t _pinR<span class="token punctuation">;</span>                          <span class="token comment">// GPIO connected to resistor side.</span>
+    uint8_t _pinL<span class="token punctuation">;</span>                          <span class="token comment">// GPIO connected to LED side.</span>
+    uint8_t _pinFb<span class="token punctuation">;</span>                         <span class="token comment">// ADC feedback connection between resistor and LED.</span>
+
+<span class="token keyword">public</span><span class="token operator">:</span>                                     <span class="token comment">// WIRING: pinR --- resistor --- pinFb --- LED --- pinL</span>
+    <span class="token function">ArduinoSafeLED</span><span class="token punctuation">(</span>uint8_t pinR<span class="token punctuation">,</span>uint8_t pinFb<span class="token punctuation">,</span>uint8_t pinL<span class="token punctuation">)</span><span class="token operator">:</span> <span class="token function">_pinR</span><span class="token punctuation">(</span>pinR<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">_pinFb</span><span class="token punctuation">(</span>pinFb<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">_pinL</span><span class="token punctuation">(</span>pinL<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token punctuation">}</span>
+
+<span class="token keyword">protected</span><span class="token operator">:</span>
+    <span class="token keyword">void</span> <span class="token function">initHardware</span><span class="token punctuation">(</span><span class="token punctuation">)</span> override <span class="token punctuation">{</span>          <span class="token comment">// Initialize Arduino hardware backend.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinR<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Prepare output latch before enabling output driver.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinL<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Prepare output latch before enabling output driver.</span>
+        <span class="token function">pinMode</span><span class="token punctuation">(</span>_pinR<span class="token punctuation">,</span> OUTPUT<span class="token punctuation">)</span><span class="token punctuation">;</span>             <span class="token comment">// Enable output driver for _pinR.</span>
+        <span class="token function">pinMode</span><span class="token punctuation">(</span>_pinL<span class="token punctuation">,</span> OUTPUT<span class="token punctuation">)</span><span class="token punctuation">;</span>             <span class="token comment">// Enable output driver for _pinL.</span>
+        <span class="token function">analogReference</span><span class="token punctuation">(</span>DEFAULT<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Configure ADC reference.</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">void</span> <span class="token function">driveOff</span><span class="token punctuation">(</span><span class="token punctuation">)</span> override <span class="token punctuation">{</span>              <span class="token comment">// Disable LED current.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinR<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Drive _pinR low.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinL<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Drive _pinL low.</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">void</span> <span class="token function">driveRL</span><span class="token punctuation">(</span><span class="token punctuation">)</span> override <span class="token punctuation">{</span>               <span class="token comment">// Drive current from resistor side to LED side.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinR<span class="token punctuation">,</span> HIGH<span class="token punctuation">)</span><span class="token punctuation">;</span>          <span class="token comment">// Forward bias _pinR.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinL<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Sink current through _pinL.</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">void</span> <span class="token function">driveLR</span><span class="token punctuation">(</span><span class="token punctuation">)</span> override <span class="token punctuation">{</span>               <span class="token comment">// Drive current from LED side to resistor side.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinR<span class="token punctuation">,</span> LOW<span class="token punctuation">)</span><span class="token punctuation">;</span>           <span class="token comment">// Sink current through _pinR.</span>
+        <span class="token function">digitalWrite</span><span class="token punctuation">(</span>_pinL<span class="token punctuation">,</span> HIGH<span class="token punctuation">)</span><span class="token punctuation">;</span>          <span class="token comment">// Forward bias _pinL.</span>
+    <span class="token punctuation">}</span>
+
+    uint16_t <span class="token function">readAdc</span><span class="token punctuation">(</span><span class="token punctuation">)</span> override <span class="token punctuation">{</span>           <span class="token comment">// Returns normalized voltage between 0-65535.</span>
+        uint16_t adc <span class="token operator">=</span> <span class="token function">analogRead</span><span class="token punctuation">(</span>_pinFb<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Read 10-bit ADC value.</span>
+        <span class="token keyword">return</span> adc <span class="token operator">&lt;&lt;</span> <span class="token number">6</span><span class="token punctuation">;</span>                    <span class="token comment">// Normalize ADC value to 16-bit range.</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+</code></pre>
+<p>More advanced implementations may use:</p>
+<ul>
+<li>direct port access</li>
+<li>templates</li>
+<li>compile-time pin mapping</li>
+<li>hardware abstraction layers</li>
+<li>optimized GPIO libraries</li>
+</ul>
+<p>to reduce code size and increase performance.</p>
+<hr>
+<h1 id="optional-statistics-layer">Optional Statistics Layer</h1>
+<p>SafeLED supports optional diagnostic and statistics layers through the <code>ledError()</code> hook.</p>
+<p>The default implementation may be empty:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">,</span> uint16_t adc<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token punctuation">}</span>  <span class="token comment">// Called when LED verification fails.</span>
+</code></pre>
+<p>Applications may implement additional diagnostics by overriding this hook.</p>
+<p>Example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">class</span> <span class="token class-name">ArduinoSafeLEDstats</span> <span class="token operator">:</span> <span class="token keyword">public</span> ArduinoSafeLED <span class="token punctuation">{</span>
+<span class="token keyword">protected</span><span class="token operator">:</span>
+    uint32_t _errCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                                 <span class="token comment">// LED verification error counter.</span>
+<span class="token keyword">public</span><span class="token operator">:</span>
+    <span class="token keyword">using</span> ArduinoSafeLED<span class="token operator">::</span>ArduinoSafeLED<span class="token punctuation">;</span>                   <span class="token comment">// Inherit constructor(s) from ArduinoSafeLED.</span>
+
+    uint32_t <span class="token function">errCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token keyword">const</span> <span class="token punctuation">{</span>                             <span class="token comment">// Returns LED verification error counter.</span>
+        <span class="token keyword">return</span> _errCount<span class="token punctuation">;</span>                                   <span class="token comment">// Return LED verification error counter.</span>
+    <span class="token punctuation">}</span>
+
+    <span class="token keyword">void</span> <span class="token function">clearErrCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>                                  <span class="token comment">// Clears LED verification error counter.</span>
+        _errCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                                      <span class="token comment">// Clear LED verification error counter.</span>
+    <span class="token punctuation">}</span>
+<span class="token keyword">protected</span><span class="token operator">:</span>
+    <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">,</span> uint16_t adc<span class="token punctuation">)</span> override <span class="token punctuation">{</span>   <span class="token comment">// Called when LED verification fails.</span>
+        _errCount<span class="token operator">++</span><span class="token punctuation">;</span>                                        <span class="token comment">// Count LED verification failure.</span>
+    <span class="token punctuation">}</span>
+<span class="token punctuation">}</span><span class="token punctuation">;</span>
+</code></pre>
+<p>This demonstrates how:</p>
+<ul>
+<li>diagnostics can be layered on top of the core library</li>
+<li>applications only pay RAM and code size for features they use</li>
+<li>more advanced logging or statistics systems may be implemented later</li>
+</ul>
+<hr>
+<h1 id="embedded-fundamentals">Embedded Fundamentals</h1>
+<p>SafeLED is intentionally simple.</p>
+<p>The purpose is not only to control an LED, but also to demonstrate important embedded fundamentals:</p>
+<ul>
+<li>outputs should sometimes be verified</li>
+<li>hardware is not always ideal</li>
+<li>runtime diagnostics matter</li>
+<li>watchdogs should only be cleared when the system behaves correctly</li>
+<li>intermittent faults exist</li>
+<li>software assumptions should be validated against reality</li>
+</ul>
+<hr>
+<h1 id="example-usage">Example Usage</h1>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">if</span> <span class="token punctuation">(</span>led<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>                       <span class="token comment">// Initialize and detect LED type.</span>
+    led<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                         <span class="token comment">// Turn on mono or low-Vf LED channel.</span>
+    <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">500</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                         <span class="token comment">// Wait 500 milliseconds.</span>
+    <span class="token keyword">if</span> <span class="token punctuation">(</span>led<span class="token punctuation">.</span><span class="token function">isBiColor</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>              <span class="token comment">// Check if LED supports second color.</span>
+        led<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">2</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                     <span class="token comment">// Turn on high-Vf LED channel.</span>
+    <span class="token punctuation">}</span>
+    <span class="token function">delay</span><span class="token punctuation">(</span><span class="token number">500</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                         <span class="token comment">// Wait 500 milliseconds.</span>
+    led<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                         <span class="token comment">// Turn LED off.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Watchdog example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp">led<span class="token punctuation">.</span><span class="token function">set</span><span class="token punctuation">(</span><span class="token number">1</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                             <span class="token comment">// Turn status LED on.</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span>led<span class="token punctuation">.</span><span class="token function">check</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>                      <span class="token comment">// Verify LED operation.</span>
+    <span class="token function">wdt_reset</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                        <span class="token comment">// Clear watchdog timer.</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<p>Statistics example:</p>
+<pre class=" language-cpp"><code class="prism  language-cpp">                                        <span class="token comment">// WIRING: pinR --- resistor --- pinFb --- LED --- pinL</span>
+ArduinoSafeLEDstats <span class="token function">led</span><span class="token punctuation">(</span><span class="token number">16</span><span class="token punctuation">,</span>A0<span class="token punctuation">,</span><span class="token number">15</span><span class="token punctuation">)</span><span class="token punctuation">;</span>      <span class="token comment">// Create LED with statistics layer.</span>
+led<span class="token punctuation">.</span><span class="token function">clearErrCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>                    <span class="token comment">// Clear previous diagnostic history.</span>
+<span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span>led<span class="token punctuation">.</span><span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>                      <span class="token comment">// Initialize and detect LED.</span>
+    Serial<span class="token punctuation">.</span><span class="token function">println</span><span class="token punctuation">(</span>                     <span class="token comment">// Print LED verification error count.</span>
+        led<span class="token punctuation">.</span><span class="token function">errCount</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+    <span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<hr>
+<h1 id="industrial-motivation">Industrial Motivation</h1>
+<p>SafeLED was inspired by real production and industrial test environments where:</p>
+<ul>
+<li>LEDs may be mounted reversed</li>
+<li>hand-soldered LEDs may have polarity errors</li>
+<li>front panel indicators may be connected through cables</li>
+<li>connectors may become unstable</li>
+<li>products may run for weeks or months without reboot</li>
+<li>intermittent faults matter</li>
+<li>visual indicators may be part of system diagnostics</li>
+</ul>
+<p>Sometimes the simplest components deserve verification too.</p>
+<hr>
+<h1 id="license">License</h1>
+<p>SafeLED is licensed under the LGPL-2.1 license.</p>
+<hr>
+<h2 id="contact">Contact</h2>
+<p>If you have any questions, feedback, or need further assistance, feel free to <a href="https://www.arduino.one/contact.html">Contact Me</a> through my online form.</p>
+
+    </div>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,28 @@
+# Syntax Coloring Map For SafeLED
+
+#######################################
+# Classes (KEYWORD1)
+#######################################
+
+SafeLED             KEYWORD1
+ArduinoSafeLED      KEYWORD1
+ArduinoSafeLEDstats KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+init                KEYWORD2
+set                 KEYWORD2
+check               KEYWORD2
+readVoltage         KEYWORD2
+getColors           KEYWORD2
+isMono              KEYWORD2
+isBiColor           KEYWORD2
+isReversed          KEYWORD2
+errCount            KEYWORD2
+clearErrCount       KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
