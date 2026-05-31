@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.1 - 2026-05-31
+### Changed
+- Added source file headers with copyright, license, and file descriptions.
+- No API or functional changes.
+
 ## [1.0.0] - 2026-05-31
 ### Initial Release
 Features:
