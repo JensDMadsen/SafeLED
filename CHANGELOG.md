@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.0.2 - 2026-06-07
+### Changed
+- Added `[[maybe_unused]]` to default virtual callback implementations
+  to suppress unused-parameter warnings while preserving parameter names.
+- Cleaned up callback documentation examples and inline implementations.
+- Corrected constructor initialization order in one class implementation.
+
 ## 1.0.1 - 2026-05-31
 ### Changed
 - Added source file headers with copyright, license, and file descriptions.

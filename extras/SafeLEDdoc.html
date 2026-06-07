@@ -438,8 +438,8 @@ adc16 = adc16</p>
 <pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">class</span> <span class="token class-name">ArduinoSafeLED</span> <span class="token operator">:</span> <span class="token keyword">public</span> SafeLED <span class="token punctuation">{</span>
 <span class="token keyword">protected</span><span class="token operator">:</span>
     uint8_t _pinR<span class="token punctuation">;</span>                          <span class="token comment">// GPIO connected to resistor side.</span>
-    uint8_t _pinL<span class="token punctuation">;</span>                          <span class="token comment">// GPIO connected to LED side.</span>
     uint8_t _pinFb<span class="token punctuation">;</span>                         <span class="token comment">// ADC feedback connection between resistor and LED.</span>
+    uint8_t _pinL<span class="token punctuation">;</span>                          <span class="token comment">// GPIO connected to LED side.</span>
 
 <span class="token keyword">public</span><span class="token operator">:</span>                                     <span class="token comment">// WIRING: pinR --- resistor --- pinFb --- LED --- pinL</span>
     <span class="token function">ArduinoSafeLED</span><span class="token punctuation">(</span>uint8_t pinR<span class="token punctuation">,</span>uint8_t pinFb<span class="token punctuation">,</span>uint8_t pinL<span class="token punctuation">)</span><span class="token operator">:</span> <span class="token function">_pinR</span><span class="token punctuation">(</span>pinR<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">_pinFb</span><span class="token punctuation">(</span>pinFb<span class="token punctuation">)</span><span class="token punctuation">,</span><span class="token function">_pinL</span><span class="token punctuation">(</span>pinL<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token punctuation">}</span>
@@ -487,7 +487,7 @@ adc16 = adc16</p>
 <h1 id="optional-statistics-layer">Optional Statistics Layer</h1>
 <p>SafeLED supports optional diagnostic and statistics layers through the <code>ledError()</code> hook.</p>
 <p>The default implementation may be empty:</p>
-<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">,</span> uint16_t adc<span class="token punctuation">)</span> <span class="token punctuation">{</span> <span class="token punctuation">}</span>  <span class="token comment">// Called when LED verification fails.</span>
+<pre class=" language-cpp"><code class="prism  language-cpp"><span class="token keyword">virtual</span> <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">[</span>maybe_unused<span class="token punctuation">]</span><span class="token punctuation">]</span> uint8_t state<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">[</span>maybe_unused<span class="token punctuation">]</span><span class="token punctuation">]</span> uint16_t adc<span class="token punctuation">)</span>    <span class="token comment">// Called when LED verification fails.</span>
 </code></pre>
 <p>Applications may implement additional diagnostics by overriding this hook.</p>
 <p>Example:</p>
@@ -505,7 +505,7 @@ adc16 = adc16</p>
         _errCount <span class="token operator">=</span> <span class="token number">0</span><span class="token punctuation">;</span>                                      <span class="token comment">// Clear LED verification error counter.</span>
     <span class="token punctuation">}</span>
 <span class="token keyword">protected</span><span class="token operator">:</span>
-    <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span>uint8_t state<span class="token punctuation">,</span> uint16_t adc<span class="token punctuation">)</span> override <span class="token punctuation">{</span>   <span class="token comment">// Called when LED verification fails.</span>
+    <span class="token keyword">void</span> <span class="token function">ledError</span><span class="token punctuation">(</span><span class="token punctuation">[</span><span class="token punctuation">[</span>maybe_unused<span class="token punctuation">]</span><span class="token punctuation">]</span> uint8_t state<span class="token punctuation">,</span> <span class="token punctuation">[</span><span class="token punctuation">[</span>maybe_unused<span class="token punctuation">]</span><span class="token punctuation">]</span> uint16_t adc<span class="token punctuation">)</span> override <span class="token punctuation">{</span>     <span class="token comment">// Called when LED verification fails.</span>
         _errCount<span class="token operator">++</span><span class="token punctuation">;</span>                                        <span class="token comment">// Count LED verification failure.</span>
     <span class="token punctuation">}</span>
 <span class="token punctuation">}</span><span class="token punctuation">;</span>

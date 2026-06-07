@@ -43,7 +43,7 @@ public:
   void clearErrCount()      { _errCount = 0;      } // Clears LED verification error counter.
 
 protected:
-  void ledError(uint8_t state,uint16_t adc) override { // Called when LED verification fails.
+  void ledError([[maybe_unused]] uint8_t state,[[maybe_unused]] uint16_t adc) override { // Called when LED verification fails.
     _errCount++;                                    // Count LED verification failure.
   }
 };

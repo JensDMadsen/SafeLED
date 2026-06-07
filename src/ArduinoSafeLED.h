@@ -36,8 +36,8 @@
 class ArduinoSafeLED : public SafeLED {
 protected:
   uint8_t _pinR;                                    // GPIO connected to resistor side.
-  uint8_t _pinL;                                    // GPIO connected to LED side.
   uint8_t _pinFb;                                   // ADC feedback connection between resistor and LED.
+  uint8_t _pinL;                                    // GPIO connected to LED side.
 
 public:                                             // WIRING: pinR --- resistor --- pinFb --- LED --- pinL
   ArduinoSafeLED(uint8_t pinR,uint8_t pinFb,uint8_t pinL): _pinR(pinR),_pinFb(pinFb),_pinL(pinL) { }

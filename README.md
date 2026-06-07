@@ -442,8 +442,8 @@ This allows the same core logic to be used with:
 class ArduinoSafeLED : public SafeLED {
 protected:
     uint8_t _pinR;                          // GPIO connected to resistor side.
-    uint8_t _pinL;                          // GPIO connected to LED side.
     uint8_t _pinFb;                         // ADC feedback connection between resistor and LED.
+    uint8_t _pinL;                          // GPIO connected to LED side.
 
 public:                                     // WIRING: pinR --- resistor --- pinFb --- LED --- pinL
     ArduinoSafeLED(uint8_t pinR,uint8_t pinFb,uint8_t pinL): _pinR(pinR),_pinFb(pinFb),_pinL(pinL) { }
@@ -498,7 +498,7 @@ SafeLED supports optional diagnostic and statistics layers through the `ledError
 The default implementation may be empty:
 
 ```cpp
-virtual void ledError(uint8_t state, uint16_t adc) { }  // Called when LED verification fails.
+virtual void ledError([[maybe_unused]] uint8_t state, [[maybe_unused]] uint16_t adc)    // Called when LED verification fails.
 ```
 
 Applications may implement additional diagnostics by overriding this hook.
@@ -520,7 +520,7 @@ public:
         _errCount = 0;                                      // Clear LED verification error counter.
     }
 protected:
-    void ledError(uint8_t state, uint16_t adc) override {   // Called when LED verification fails.
+    void ledError([[maybe_unused]] uint8_t state, [[maybe_unused]] uint16_t adc) override {     // Called when LED verification fails.
         _errCount++;                                        // Count LED verification failure.
     }
 };

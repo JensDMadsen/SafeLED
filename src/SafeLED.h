@@ -75,7 +75,7 @@ protected:
     return adc >= minDefault2 && adc <= maxDefault2;    // Check upper and lower voltage limits.
   }
 
-  virtual void ledError(uint8_t state,uint16_t adc) { } // Called when LED verification fails.
+  virtual void ledError([[maybe_unused]] uint8_t state, [[maybe_unused]] uint16_t adc) { } // Called when LED verification fails.
 
 private:
   bool validateState(uint8_t state, uint16_t adc);      // Validate voltage for logical LED state.
